@@ -87,6 +87,21 @@ func TryDecrypt(password string, data *DataObject) (string, bool) {
 	return string(plaintext), true
 }
 
+// Combos sends all combinations of the charset of the given length through the
+// channel.
+func Combos(length int, prefix string, charset string, c chan string) {
+	// Base case
+	if length == 0 {
+		c <- prefix
+		return
+	}
+
+	// Inductive case
+	for _, char := range charset {
+		Combos(length-1, prefix+string(char), charset, c)
+	}
+}
+
 func main() {
 	// Parse command line flags and arguments
 	charset := flag.String("charset", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "Charset to use for cracking")
@@ -101,8 +116,14 @@ func main() {
 	url := flag.Arg(0)
 	data := ParseUrl(url)
 
-	// Try a password
+	c := make(chan string)
+
+	_ = c
 	_ = charset
+	_ = data
+
+	// Try a password
+	// TODO: Remove
 	plaintext, ok := TryDecrypt("test", data)
 	if !ok {
 		fmt.Println("Decryption failed!")
