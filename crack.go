@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"runtime"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -33,7 +34,6 @@ type DataObject struct {
 // possible. Otherwise it raises fatal errors.
 func ParseUrl(rawUrl string) *DataObject {
 	// Parse URL
-	// NOTE: Test password is "test" and destination is https://jstrieb.github.io/link-lock/create/
 	url, err := url.Parse(rawUrl)
 	if err != nil {
 		log.Fatal("Unable to parse the URL.")
@@ -160,13 +160,22 @@ func main() {
 		comboChan := make(chan string, 16)
 		go Combos(length, "", *charset, comboChan)
 
-		// Try combinations in parallel and report when done
+		// Try combinations in parallel and report when done.
+		// NOTE: Can use all threads for decryption because computing
+		// combinations is negligibly cheap in comparison (and thus doesn't need
+		// its own thread)
 		done := make(chan bool)
-		for i := 0; i < 8; i++ {
+		numThreads := runtime.NumCPU()
+		for i := 0; i < numThreads; i++ {
 			go TryCombos(data, comboChan, done)
 		}
-		if <-done {
-			return
+
+		// Wait for a goroutine to find the answer, or for all to finish when
+		// the combo channel closes
+		for i := 0; i < numThreads; i++ {
+			if <-done {
+				return
+			}
 		}
 
 		length++
