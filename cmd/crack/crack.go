@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -163,11 +164,21 @@ func PrintProgress(count chan int, frequency time.Duration) {
 func main() {
 	// Parse command line flags and arguments
 	charset := flag.String("charset", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "Charset to use for cracking")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "Usage: crack [options] <Link Lock url>\nOptions:")
 		flag.PrintDefaults()
 		return
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	// Parse the URL
@@ -207,5 +218,9 @@ func main() {
 		}
 
 		length++
+
+		if length == 4 {
+			break
+		}
 	}
 }
