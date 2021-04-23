@@ -108,6 +108,20 @@ func Combos(length int, prefix string, charset string, c chan string) {
 	}
 }
 
+func TryCombos(data *DataObject, comboChan chan string, done chan bool) {
+	for password := range comboChan {
+		// Try a password
+		plaintext, ok := TryDecrypt(password, data)
+		if ok {
+			log.Println(string(plaintext))
+			done <- true
+			return
+		}
+	}
+
+	done <- false
+}
+
 func main() {
 	// Parse command line flags and arguments
 	charset := flag.String("charset", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "Charset to use for cracking")
@@ -123,6 +137,7 @@ func main() {
 	data := ParseUrl(url)
 
 	length := 0
+	done := make(chan bool)
 	for {
 		log.Printf("Trying %v passwords of length %v\n", math.Pow(float64(len(*charset)), float64(length)), length)
 
@@ -130,13 +145,9 @@ func main() {
 		c := make(chan string)
 		go Combos(length, "", *charset, c)
 
-		for password := range c {
-			// Try a password
-			plaintext, ok := TryDecrypt(password, data)
-			if ok {
-				log.Println(string(plaintext))
-				return
-			}
+		go TryCombos(data, c, done)
+		if <-done {
+			return
 		}
 
 		length++
