@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/url"
 	"os"
 
@@ -90,6 +91,11 @@ func TryDecrypt(password string, data *DataObject) (string, bool) {
 // Combos sends all combinations of the charset of the given length through the
 // channel.
 func Combos(length int, prefix string, charset string, c chan string) {
+	// If recursive depth is 0, close the channel when we finish
+	if prefix == "" {
+		defer close(c)
+	}
+
 	// Base case
 	if length == 0 {
 		c <- prefix
@@ -116,17 +122,23 @@ func main() {
 	url := flag.Arg(0)
 	data := ParseUrl(url)
 
-	c := make(chan string)
+	length := 0
+	for {
+		log.Printf("Trying %v passwords of length %v\n", math.Pow(float64(len(*charset)), float64(length)), length)
 
-	_ = c
-	_ = charset
-	_ = data
+		// TODO: Adjust channel buffer size
+		c := make(chan string)
+		go Combos(length, "", *charset, c)
 
-	// Try a password
-	// TODO: Remove
-	plaintext, ok := TryDecrypt("test", data)
-	if !ok {
-		fmt.Println("Decryption failed!")
+		for password := range c {
+			// Try a password
+			plaintext, ok := TryDecrypt(password, data)
+			if ok {
+				log.Println(string(plaintext))
+				return
+			}
+		}
+
+		length++
 	}
-	fmt.Println(string(plaintext))
 }
