@@ -143,7 +143,6 @@ func TryCombos(data *DataObject, comboChan chan string, done chan bool, countCha
 // far, and periodically prints out a status line
 func PrintProgress(count chan int, frequency time.Duration) {
 	start := time.Now()
-	defer fmt.Printf("Completed in %v\n", time.Since(start)) // Never gets called :(
 
 	ticker := time.Tick(frequency * time.Second)
 	total := 0.0 // Float for doing division later
@@ -178,6 +177,7 @@ func main() {
 	// Run a goroutine that sends progress updates
 	countChan := make(chan int, 128)
 	go PrintProgress(countChan, 1)
+	defer fmt.Println("") // Let the last progress line remain
 
 	length := 0
 	for {
