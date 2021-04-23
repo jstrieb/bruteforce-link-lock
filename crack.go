@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -86,8 +88,21 @@ func TryDecrypt(password string, data *DataObject) (string, bool) {
 }
 
 func main() {
-	data := ParseUrl("https://jstrieb.github.io/link-lock/#eyJ2IjoiMC4wLjEiLCJlIjoiWEk0ZS9GQkcxcko5Y1JCRVovUzk4Sk5IeGJwN0ljRk5MZUhTcVNrTUlpbW1mOFp4WlJIclEyK0lmY1liY3hOKy84WmlhMHdQYWFxcFhOcz0iLCJzIjoiMlFDNkIrcHcxckw4S0RiV1MvdWZqZz09IiwiaSI6IndCYkZZdHI4UFlNUittYnQifQ==")
+	// Parse command line flags and arguments
+	charset := flag.String("charset", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "Charset to use for cracking")
+	flag.Parse()
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "Usage: crack [options] <Link Lock url>\nOptions:")
+		flag.PrintDefaults()
+		return
+	}
 
+	// Parse the URL
+	url := flag.Arg(0)
+	data := ParseUrl(url)
+
+	// Try a password
+	_ = charset
 	plaintext, ok := TryDecrypt("test", data)
 	if !ok {
 		fmt.Println("Decryption failed!")
