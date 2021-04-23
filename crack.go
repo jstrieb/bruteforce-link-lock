@@ -16,11 +16,17 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-type DataObject struct {
+type DataObjectTemplate struct {
 	Encrypted string `json:"e"`
 	Salt      string `json:"s"`
 	IV        string `json:"i"`
 	// Version   string `json:"v"`
+}
+
+type DataObject struct {
+	Encrypted []byte
+	Salt      []byte
+	IV        []byte
 }
 
 // ParseUrl extracts a base64 encoded JSON string from the fragment of a URL, if
@@ -40,10 +46,30 @@ func ParseUrl(rawUrl string) *DataObject {
 	}
 
 	// Parse JSON object
-	data := &DataObject{}
-	if json.Unmarshal(decoded, data) != nil {
+	encodedData := &DataObjectTemplate{}
+	if json.Unmarshal(decoded, encodedData) != nil {
 		log.Fatal("Failed to unmarshal JSON.")
 	}
+
+	// Base64 decode bytes
+	// TODO: Handle default cases for missing salt and IV
+	data := &DataObject{}
+	salt, err := base64.StdEncoding.DecodeString(encodedData.Salt)
+	if err != nil {
+		log.Fatal("Failed to base64 decode the salt.")
+	}
+	iv, err := base64.StdEncoding.DecodeString(encodedData.IV)
+	if err != nil {
+		log.Fatal("Failed to base64 decode the IV.")
+	}
+	encrypted, err := base64.StdEncoding.DecodeString(encodedData.Encrypted)
+	if err != nil {
+		log.Fatal("Failed to base64 decode the ciphertext.")
+	}
+
+	data.Salt = salt
+	data.IV = iv
+	data.Encrypted = encrypted
 
 	return data
 }
@@ -53,11 +79,7 @@ func ParseUrl(rawUrl string) *DataObject {
 // any parsing step fails.
 func TryDecrypt(password string, data *DataObject) (string, bool) {
 	// Perform key derivation
-	salt, err := base64.StdEncoding.DecodeString(data.Salt)
-	if err != nil {
-		log.Fatal("Failed to base64 decode the salt.")
-	}
-	k := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+	k := pbkdf2.Key([]byte(password), data.Salt, 100000, 32, sha256.New)
 
 	// Generate an AES decoder for the given key
 	block, err := aes.NewCipher(k)
@@ -69,18 +91,8 @@ func TryDecrypt(password string, data *DataObject) (string, bool) {
 		log.Fatal("Failed to create a new GCM wrapping from the block cipher.")
 	}
 
-	// Base64 decode the IV and encrypted key material
-	iv, err := base64.StdEncoding.DecodeString(data.IV)
-	if err != nil {
-		log.Fatal("Failed to base64 decode the IV.")
-	}
-	encrypted, err := base64.StdEncoding.DecodeString(data.Encrypted)
-	if err != nil {
-		log.Fatal("Failed to base64 decode the ciphertext.")
-	}
-
 	// Decrypt ciphertext
-	plaintext, err := aesgcm.Open(nil, iv, encrypted, nil)
+	plaintext, err := aesgcm.Open(nil, data.IV, data.Encrypted, nil)
 	if err != nil {
 		return "", false
 	}
@@ -142,10 +154,10 @@ func main() {
 		log.Printf("Trying %v passwords of length %v\n", math.Pow(float64(len(*charset)), float64(length)), length)
 
 		// TODO: Adjust channel buffer size
-		c := make(chan string)
-		go Combos(length, "", *charset, c)
+		comboChan := make(chan string)
+		go Combos(length, "", *charset, comboChan)
 
-		go TryCombos(data, c, done)
+		go TryCombos(data, comboChan, done)
 		if <-done {
 			return
 		}
