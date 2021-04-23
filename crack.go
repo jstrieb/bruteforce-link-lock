@@ -120,6 +120,9 @@ func Combos(length int, prefix string, charset string, c chan string) {
 	}
 }
 
+// TryCombos loops over combinations that come in over the channel and attempts
+// to decrypt using the combination as a passphrase. Sends a message on the done
+// channel when it has either exhausted the channel or found a solution.
 func TryCombos(data *DataObject, comboChan chan string, done chan bool) {
 	for password := range comboChan {
 		// Try a password
@@ -149,15 +152,19 @@ func main() {
 	data := ParseUrl(url)
 
 	length := 0
-	done := make(chan bool)
 	for {
-		log.Printf("Trying %v passwords of length %v\n", math.Pow(float64(len(*charset)), float64(length)), length)
+		keyspace := uint64(math.Pow(float64(len(*charset)), float64(length)))
+		log.Printf("Trying %v passwords of length %v\n", keyspace, length)
 
-		// TODO: Adjust channel buffer size
-		comboChan := make(chan string)
+		// Generate combinations to try
+		comboChan := make(chan string, 16)
 		go Combos(length, "", *charset, comboChan)
 
-		go TryCombos(data, comboChan, done)
+		// Try combinations in parallel and report when done
+		done := make(chan bool)
+		for i := 0; i < 8; i++ {
+			go TryCombos(data, comboChan, done)
+		}
 		if <-done {
 			return
 		}
