@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"time"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -40,18 +41,18 @@ func ParseUrl(rawUrl string) *DataObject {
 	}
 
 	// Base64 decode URL fragment
-	decoded, err := base64.StdEncoding.DecodeString(url.EscapedFragment())
+	urlJson, err := base64.StdEncoding.DecodeString(url.EscapedFragment())
 	if err != nil {
 		log.Fatal("Failed to base64 decode the URL fragment.")
 	}
 
-	// Parse JSON object
+	// Parse JSON object. NOTE: fields are still individually base64 encoded
 	encodedData := &DataObjectTemplate{}
-	if json.Unmarshal(decoded, encodedData) != nil {
+	if json.Unmarshal(urlJson, encodedData) != nil {
 		log.Fatal("Failed to unmarshal JSON.")
 	}
 
-	// Base64 decode bytes
+	// Base64 decode byte fields from JSON object
 	// TODO: Handle default cases for missing salt and IV
 	data := &DataObject{}
 	salt, err := base64.StdEncoding.DecodeString(encodedData.Salt)
@@ -123,7 +124,7 @@ func Combos(length int, prefix string, charset string, c chan string) {
 // TryCombos loops over combinations that come in over the channel and attempts
 // to decrypt using the combination as a passphrase. Sends a message on the done
 // channel when it has either exhausted the channel or found a solution.
-func TryCombos(data *DataObject, comboChan chan string, done chan bool) {
+func TryCombos(data *DataObject, comboChan chan string, done chan bool, countChan chan int) {
 	for password := range comboChan {
 		// Try a password
 		plaintext, ok := TryDecrypt(password, data)
@@ -132,9 +133,32 @@ func TryCombos(data *DataObject, comboChan chan string, done chan bool) {
 			done <- true
 			return
 		}
+		countChan <- 1
 	}
 
 	done <- false
+}
+
+// PrintProgress receives data about how many passwords have been attempted so
+// far, and periodically prints out a status line
+func PrintProgress(count chan int, frequency time.Duration) {
+	start := time.Now()
+	defer fmt.Printf("Completed in %v\n", time.Since(start)) // Never gets called :(
+
+	ticker := time.Tick(frequency * time.Second)
+	total := 0.0 // Float for doing division later
+	x := 0
+	for {
+		select {
+		case x = <-count:
+			total += float64(x)
+		case <-ticker:
+			rate := total / time.Since(start).Seconds()
+			// Extra spaces at the end to handle carriage return weirdness and
+			// slightly different string lengths
+			fmt.Printf("Tried %v in %v at %d/s   \r", total, time.Since(start), int(rate))
+		}
+	}
 }
 
 func main() {
@@ -151,13 +175,17 @@ func main() {
 	url := flag.Arg(0)
 	data := ParseUrl(url)
 
+	// Run a goroutine that sends progress updates
+	countChan := make(chan int, 128)
+	go PrintProgress(countChan, 1)
+
 	length := 0
 	for {
 		keyspace := uint64(math.Pow(float64(len(*charset)), float64(length)))
 		log.Printf("Trying %v passwords of length %v\n", keyspace, length)
 
 		// Generate combinations to try
-		comboChan := make(chan string, 16)
+		comboChan := make(chan string, 128)
 		go Combos(length, "", *charset, comboChan)
 
 		// Try combinations in parallel and report when done.
@@ -167,7 +195,7 @@ func main() {
 		done := make(chan bool)
 		numThreads := runtime.NumCPU()
 		for i := 0; i < numThreads; i++ {
-			go TryCombos(data, comboChan, done)
+			go TryCombos(data, comboChan, done, countChan)
 		}
 
 		// Wait for a goroutine to find the answer, or for all to finish when
