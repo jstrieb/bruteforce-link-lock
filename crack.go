@@ -151,7 +151,8 @@ func TryCombos(data *DataObject, comboChan chan string, done chan bool, countCha
 		// Try a password
 		plaintext, ok := TryDecrypt(password, data)
 		if ok {
-			log.Println(string(plaintext))
+			log.Printf(`Decrypted link "%v"`, string(plaintext))
+			log.Printf(`Password "%v"`, password)
 			done <- true
 			return
 		}
