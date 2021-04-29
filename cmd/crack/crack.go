@@ -37,18 +37,22 @@ func ParseUrl(rawUrl string) *DataObject {
 	// Parse URL
 	url, err := url.Parse(rawUrl)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Unable to parse the URL.")
 	}
 
 	// Base64 decode URL fragment
 	urlJson, err := base64.StdEncoding.DecodeString(url.EscapedFragment())
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to base64 decode the URL fragment.")
 	}
 
 	// Parse JSON object. NOTE: fields are still individually base64 encoded
 	encodedData := &DataObjectTemplate{}
-	if json.Unmarshal(urlJson, encodedData) != nil {
+	err = json.Unmarshal(urlJson, encodedData)
+	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to unmarshal JSON.")
 	}
 
@@ -70,14 +74,17 @@ func ParseUrl(rawUrl string) *DataObject {
 	data := &DataObject{}
 	salt, err := base64.StdEncoding.DecodeString(encodedData.Salt)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to base64 decode the salt.")
 	}
 	iv, err := base64.StdEncoding.DecodeString(encodedData.IV)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to base64 decode the IV.")
 	}
 	encrypted, err := base64.StdEncoding.DecodeString(encodedData.Encrypted)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to base64 decode the ciphertext.")
 	}
 
@@ -98,10 +105,12 @@ func TryDecrypt(password string, data *DataObject) (string, bool) {
 	// Generate an AES decoder for the given key
 	block, err := aes.NewCipher(k)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to create a new cipher from the key.")
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
+		log.Println(err)
 		log.Fatal("Failed to create a new GCM wrapping from the block cipher.")
 	}
 
