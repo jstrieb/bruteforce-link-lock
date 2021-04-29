@@ -22,7 +22,7 @@ type DataObjectTemplate struct {
 	Encrypted string `json:"e"`
 	Salt      string `json:"s"`
 	IV        string `json:"i"`
-	// Version   string `json:"v"`
+	Version   string `json:"v"`
 }
 
 type DataObject struct {
@@ -52,8 +52,21 @@ func ParseUrl(rawUrl string) *DataObject {
 		log.Fatal("Failed to unmarshal JSON.")
 	}
 
+	// Handle default cases for missing salt and/or IV
+	if encodedData.Salt == "" {
+		switch encodedData.Version {
+		case "0.0.1":
+			encodedData.Salt = "7Oen+c9fyeukYvYasK5I+Q=="
+		}
+	}
+	if encodedData.IV == "" {
+		switch encodedData.Version {
+		case "0.0.1":
+			encodedData.IV = "/+2UaQb/e8pzghB0"
+		}
+	}
+
 	// Base64 decode byte fields from JSON object
-	// TODO: Handle default cases for missing salt and IV
 	data := &DataObject{}
 	salt, err := base64.StdEncoding.DecodeString(encodedData.Salt)
 	if err != nil {
